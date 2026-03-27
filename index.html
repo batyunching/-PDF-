@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>清哥老師的 PDF 小幫手</title>
+    <!-- 引入 pdf-lib 用於處理 PDF 結構 (合併、拆分) -->
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    <!-- 引入 pdf.js 用於渲染 PDF 視覺縮圖 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // 設定 PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    
+    <style>
+        :root {
+            --primary-bg: #FDFCEE; /* 米白色背景 */
+            --card-bg: #FFFFFF;
+            --accent-gold: #C8A15E; /* 質感金邊 */
+            --accent-gold-hover: #b08d4f;
+            --text-main: #333333;
+            --text-sub: #777777;
+            --border-color: #EAEAEA;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif, 'Microsoft JhengHei';
+            background-color: #f4f3ea;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .app-container {
+            background-color: var(--primary-bg);
+            width: 100%;
+            max-width: 650px; /* 加寬以容納網格縮圖 */
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 標題與頭像區域 */
+        .card-header {
+            padding: 20px 25px;
+            background: linear-gradient(180deg, #FFFFFF 0%, #FDFCEE 100%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .app-icon {
+            font-size: 28px;
+        }
+
+        .app-titles {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .app-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--text-main);
+            margin: 0;
+        }
+
+        .app-subtitle {
+            font-size: 13px;
+            color: var(--text-sub);
+            margin: 2px 0 0 0;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+        }
+
+        .personal-avatar {
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            border: 2px solid var(--accent-gold);
+            background-color: #FFF;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .personal-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: top;
+        }
+
+        /* 標籤頁導覽 */
+        .tabs {
+            display: flex;
+            background-color: #fff;
+            padding: 10px 20px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 10px;
+            border: none;
+            background: none;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-sub);
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-btn:hover {
+            color: var(--accent-gold);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-gold);
+            border-bottom: 3px solid var(--accent-gold);
+        }
+
+        /* 內容區域 */
+        .tab-content {
+            display: none;
+            padding: 25px;
+            background-color: var(--card-bg);
+            flex-grow: 1;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* 上傳區域 */
+        .upload-area {
+            border: 2px dashed var(--accent-gold);
+            border-radius: 15px;
+            padding: 30px 20px;
+            text-align: center;
+            background-color: #FFFCF7;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            background-color: #F3E8D3;
+            border-color: #a88344;
+            transform: scale(1.01);
+        }
+
+        .upload-icon {
+            font-size: 30px;
+            color: var(--accent-gold);
+            margin-bottom: 10px;
+            pointer-events: none;
+        }
+
+        .upload-text {
+            color: var(--text-main);
+            font-weight: 500;
+            margin-bottom: 5px;
+            pointer-events: none;
+        }
+
+        .upload-subtext {
+            color: var(--text-sub);
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        /* 表單與按鈕 */
+        .action-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--accent-gold);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-top: 10px;
+        }
+
+        .action-btn:hover { background-color: var(--accent-gold-hover); }
+        .action-btn:disabled { background-color: #cccccc; cursor: not-allowed; }
+
+        .action-btn-secondary {
+            background-color: #8c7345;
+        }
+        .action-btn-secondary:hover {
+            background-color: #6e5a35;
+        }
+
+        /* 狀態提示 */
+        .status-msg {
+            margin-top: 15px;
+            font-size: 14px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .status-success { color: #2e7d32; }
+        .status-error { color: #c62828; }
+        .status-loading { color: var(--accent-gold); }
+
+        /* ✅ iLovePDF 風格：視覺化縮圖網格設計 ✅ */
+        .thumbnail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+            margin-bottom: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 15px;
+            background-color: #fbfbfb;
+            border-radius: 10px;
+            border: 1px dashed var(--border-color);
+        }
+
+        .thumbnail-item {
+            position: relative;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .thumbnail-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+
+        .thumbnail-item.draggable {
+            cursor: grab;
+        }
+        .thumbnail-item.draggable:active {
+            cursor: grabbing;
+        }
+
+        /* 點選刪除狀態的反灰與紅色遮罩 */
+        .thumbnail-item.deleted {
+            opacity: 0.5;
+            filter: grayscale(80%);
+            border-color: #ff5252;
+        }
+
+        .thumbnail-canvas-container {
+            width: 100%;
+            height: 140px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            margin-bottom: 10px;
+            background-color: #f9f9f9;
+        }
+
+        .thumbnail-canvas-container canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border: 1px solid #eee;
+            box-shadow: 0 0 3px rgba(0,0,0,0.1);
+        }
+
+        .thumbnail-label {
+            font-size: 12px;
+            text-align: center;
+            color: var(--text-main);
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 移除按鈕 (右上角紅色小叉叉) */
+        .remove-badge {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            background: #ff5252;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 26px;
+            height: 26px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 10;
+        }
+        .remove-badge:hover {
+            background: #d32f2f;
+            transform: scale(1.1);
+        }
+
+        /* 被標記刪除時的超大紅色叉叉遮罩 */
+        .deleted-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255, 255, 255, 0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 50px;
+            color: #ff5252;
+            font-weight: bold;
+            pointer-events: none; /* 讓點擊事件穿透下去 */
+            opacity: 0;
+            transition: opacity 0.2s;
+            border-radius: 8px;
+            z-index: 5;
+        }
+        .thumbnail-item.deleted .deleted-overlay {
+            opacity: 1;
+        }
+
+        .hint-text { font-size: 13px; color: var(--accent-gold); margin-bottom: 10px; display: block; text-align: center; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- 標題與頭像區域 -->
+    <div class="card-header">
+        <div class="header-left">
+            <div class="app-icon">📚</div>
+            <div class="app-titles">
+                <h1 class="app-title">清哥老師的 PDF 小幫手</h1>
+                <p class="app-subtitle">教務行政專用・視覺化縮圖介面</p>
+            </div>
+        </div>
+        <div class="header-right">
+            <!-- 個人頭像區域 -->
+            <div class="personal-avatar" title="清哥老師">
+                <!-- 讀取同資料夾下的 image.png 作為頭像 -->
+                <img src="image.png" alt="清哥老師" onerror="this.src='https://via.placeholder.com/55?text=🧑‍🏫'; this.title='找不到 image.png 檔案';">
+            </div>
+        </div>
+    </div>
+
+    <!-- 標籤頁導覽 -->
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('merge')">合併檔案</button>
+        <button class="tab-btn" onclick="switchTab('split')">拆分/刪除</button>
+    </div>
+
+    <!-- 內容區域：合併 PDF -->
+    <div id="tab-merge" class="tab-content active">
+        <label class="upload-area" id="area-merge" for="merge-upload">
+            <div class="upload-icon">📄+📄</div>
+            <div class="upload-text">點擊選擇 或 拖曳多個 PDF 檔案至此</div>
+            <div class="upload-subtext">加入後，可直接拖曳下方縮圖調整合併順序</div>
+            <input type="file" id="merge-upload" multiple accept=".pdf" onchange="addMergeFiles(this.files)">
+        </label>
+        
+        <!-- 視覺化縮圖網格將會產生在這裡 -->
+        <div id="merge-list"></div>
+        
+        <button class="action-btn" id="btn-merge" onclick="handleMerge()">開始合併</button>
+        <div id="merge-status" class="status-msg"></div>
+    </div>
+
+    <!-- 內容區域：拆分/刪除 PDF -->
+    <div id="tab-split" class="tab-content">
+        <label class="upload-area" id="area-split" for="split-upload">
+            <div class="upload-icon">✂️</div>
+            <div class="upload-text">點擊選擇 或 拖曳單一 PDF 檔案至此</div>
+            <div class="upload-subtext">載入後直接點擊縮圖即可標記「刪除」該頁面</div>
+            <input type="file" id="split-upload" accept=".pdf" onchange="setSplitFile(this.files)">
+        </label>
+
+        <!-- 視覺化縮圖網格將會產生在這裡 -->
+        <div id="split-list"></div>
+        
+        <div id="split-actions" style="display: none;">
+            <button class="action-btn" id="btn-split-save" onclick="handleSplit(false)">儲存保留的頁面 (存成一個新檔)</button>
+            <button class="action-btn action-btn-secondary" id="btn-split-extract" onclick="handleSplit(true)">將保留頁面，逐一分割為獨立單頁</button>
+        </div>
+        <div id="split-status" class="status-msg"></div>
+    </div>
+</div>
+
+<script>
+    // 狀態管理
+    let globalMergeFiles = [];
+    let globalSplitFile = null;
+    let globalSplitPdfDoc = null; 
+    let globalPagesState = []; // 記錄拆分頁面的狀態 (true=保留, false=刪除)
+
+    // --- 拖曳上傳 (Drag & Drop) ---
+    function setupDragAndDrop(areaId, callback) {
+        const dropArea = document.getElementById(areaId);
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+        function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.add('dragover'), false);
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, () => dropArea.classList.remove('dragover'), false);
+        });
+        dropArea.addEventListener('drop', function(e) {
+            let dt = e.dataTransfer;
+            if (dt.files && dt.files.length > 0) callback(dt.files);
+        }, false);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setupDragAndDrop('area-merge', addMergeFiles);
+        setupDragAndDrop('area-split', setSplitFile);
+    });
+
+    // --- 【合併 PDF】視覺化縮圖與拖曳排序 ---
+    async function addMergeFiles(files) {
+        for (let i = 0; i < files.length; i++) globalMergeFiles.push(files[i]);
+        await renderMergeList();
+    }
+
+    async function removeMergeFile(index, event) {
+        event.stopPropagation();
+        globalMergeFiles.splice(index, 1);
+        await renderMergeList();
+    }
+
+    async function renderMergeList() {
+        const list = document.getElementById('merge-list');
+        list.innerHTML = '';
+        if (globalMergeFiles.length === 0) return;
+
+        list.innerHTML = '<span class="hint-text">💡 提示：按住縮圖可左右拖曳來調整合併順序喔！</span>';
+        const grid = document.createElement('div');
+        grid.className = 'thumbnail-grid';
+        list.appendChild(grid);
+
+        for (let index = 0; index < globalMergeFiles.length; index++) {
+            const file = globalMergeFiles[index];
+            const item = document.createElement('div');
+            item.className = 'thumbnail-item draggable';
+            item.draggable = true;
+            
+            // 拖曳排序事件
+            item.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', index);
+                item.style.opacity = '0.5';
+            });
+            item.addEventListener('dragend', () => item.style.opacity = '1');
+            item.addEventListener('dragover', (e) => e.preventDefault());
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                if (fromIndex !== index && !isNaN(fromIndex)) {
+                    const movedItem = globalMergeFiles.splice(fromIndex, 1)[0];
+                    globalMergeFiles.splice(index, 0, movedItem);
+                    renderMergeList(); // 重新渲染
+                }
+            });
+
+            item.innerHTML = `
+                <button class="remove-badge" onclick="removeMergeFile(${index}, event)" title="移除此檔案">✖</button>
+                <div class="thumbnail-canvas-container">
+                    <canvas id="merge-canvas-${index}"></canvas>
+                </div>
+                <div class="thumbnail-label" title="${file.name}">${file.name}</div>
+            `;
+            grid.appendChild(item);
+
+            // 渲染該檔案的「第一頁」作為縮圖
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({
+                    data: new Uint8Array(arrayBuffer),
+                    cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                    cMapPacked: true
+                }).promise;
+                const page = await pdf.getPage(1);
+                const viewport = page.getViewport({ scale: 1.0 });
+                const scale = 120 / viewport.width; // 縮放至適合網格寬度
+                const scaledViewport = page.getViewport({ scale: scale });
+                const canvas = document.getElementById(`merge-canvas-${index}`);
+                if (canvas) {
+                    canvas.height = scaledViewport.height;
+                    canvas.width = scaledViewport.width;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaledViewport }).promise;
+                }
+            } catch (error) {
+                console.error("渲染縮圖失敗", error);
+            }
+        }
+    }
+
+    // --- 【拆分/刪除 PDF】視覺化點選刪除 ---
+    async function setSplitFile(files) {
+        if (files.length === 0) return;
+        globalSplitFile = files[0];
+        const list = document.getElementById('split-list');
+        const actions = document.getElementById('split-actions');
+        
+        list.innerHTML = '<div class="status-loading">⏳ 正在載入並產生各頁面縮圖，請稍候...</div>';
+        actions.style.display = 'none';
+
+        try {
+            const arrayBuffer = await globalSplitFile.arrayBuffer();
+            globalSplitPdfDoc = await pdfjsLib.getDocument({
+                data: new Uint8Array(arrayBuffer),
+                cMapUrl: 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/cmaps/',
+                cMapPacked: true
+            }).promise;
+            const totalPages = globalSplitPdfDoc.numPages;
+            
+            // 初始化狀態：全部設定為 true (保留)
+            globalPagesState = new Array(totalPages).fill(true);
+            
+            list.innerHTML = '<span class="hint-text" style="color:#d32f2f;">💡 提示：看到不要的頁面，直接滑鼠「點一下」就能標記刪除！</span>';
+            const grid = document.createElement('div');
+            grid.className = 'thumbnail-grid';
+            grid.id = 'split-grid';
+            list.appendChild(grid);
+
+            for (let i = 1; i <= totalPages; i++) {
+                const item = document.createElement('div');
+                item.className = 'thumbnail-item';
+                // 點擊卡片觸發刪除/還原切換
+                item.onclick = () => togglePageStatus(i - 1);
+                
+                item.innerHTML = `
+                    <div class="thumbnail-canvas-container">
+                        <canvas id="split-canvas-${i}"></canvas>
+                    </div>
+                    <div class="thumbnail-label">第 ${i} 頁</div>
+                    <div class="deleted-overlay">✖</div>
+                `;
+                grid.appendChild(item);
+
+                // 非同步渲染每一頁縮圖
+                const page = await globalSplitPdfDoc.getPage(i);
+                const viewport = page.getViewport({ scale: 1.0 });
+                const scale = 120 / viewport.width;
+                const scaledViewport = page.getViewport({ scale: scale });
+                const canvas = document.getElementById(`split-canvas-${i}`);
+                if (canvas) {
+                    canvas.height = scaledViewport.height;
+                    canvas.width = scaledViewport.width;
+                    await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaledViewport }).promise;
+                }
+            }
+            // 顯示操作按鈕
+            actions.style.display = 'block';
+
+        } catch (error) {
+            console.error(error);
+            list.innerHTML = '<div class="status-error">❌ 無法讀取，檔案可能損毀。</div>';
+        }
+    }
+
+    function togglePageStatus(index) {
+        globalPagesState[index] = !globalPagesState[index]; // 切換狀態
+        const grid = document.getElementById('split-grid');
+        const items = grid.getElementsByClassName('thumbnail-item');
+        
+        if (globalPagesState[index]) {
+            // 保留狀態
+            items[index].classList.remove('deleted');
+        } else {
+            // 刪除狀態 (加上反灰與紅色叉叉遮罩)
+            items[index].classList.add('deleted');
+        }
+    }
+
+    // --- 介面控制與共用邏輯 ---
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        event.currentTarget.classList.add('active');
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+        document.querySelectorAll('.status-msg').forEach(msg => msg.innerHTML = '');
+    }
+
+    function showStatus(elementId, text, type) {
+        const el = document.getElementById(elementId);
+        el.innerText = text;
+        el.className = `status-msg status-${type}`;
+    }
+
+    function downloadFile(blob, fileName) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = fileName;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    }
+
+    // --- 功能執行邏輯 ---
+    async function handleMerge() {
+        if (globalMergeFiles.length < 2) { showStatus('merge-status', '請至少加入兩個檔案進行合併！', 'error'); return; }
+        const btn = document.getElementById('btn-merge'); btn.disabled = true;
+        showStatus('merge-status', '⏳ 正在合併處理中，請稍候...', 'loading');
+
+        try {
+            const { PDFDocument } = PDFLib;
+            const mergedPdf = await PDFDocument.create();
+            for (const file of globalMergeFiles) {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await PDFDocument.load(arrayBuffer);
+                const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                copiedPages.forEach((page) => mergedPdf.addPage(page));
+            }
+            const pdfBytes = await mergedPdf.save();
+            downloadFile(new Blob([pdfBytes], { type: 'application/pdf' }), '清哥老師_合併檔案.pdf');
+            showStatus('merge-status', '✅ 合併成功！檔案已下載。', 'success');
+        } catch (error) { showStatus('merge-status', '❌ 合併失敗，請確認檔案。', 'error'); } 
+        finally { btn.disabled = false; }
+    }
+
+    async function handleSplit(splitIntoSeparateFiles) {
+        if (!globalSplitFile) { showStatus('split-status', '請先選擇一個 PDF 檔案！', 'error'); return; }
+        
+        // 找出所有標記為 true (保留) 的頁碼索引
+        const pagesToKeep = [];
+        globalPagesState.forEach((keep, index) => {
+            if (keep) pagesToKeep.push(index);
+        });
+
+        if (pagesToKeep.length === 0) { 
+            showStatus('split-status', '❌ 您把所有頁面都刪除了，無法產出檔案！', 'error'); 
+            return; 
+        }
+
+        const btnSave = document.getElementById('btn-split-save'); 
+        const btnExtract = document.getElementById('btn-split-extract'); 
+        btnSave.disabled = true; btnExtract.disabled = true;
+        showStatus('split-status', '⏳ 正在處理中，請稍候...', 'loading');
+
+        try {
+            const { PDFDocument } = PDFLib;
+            const arrayBuffer = await globalSplitFile.arrayBuffer();
+            const originalPdf = await PDFDocument.load(arrayBuffer);
+
+            if (splitIntoSeparateFiles) {
+                // 將保留的頁面，逐一拆分成多個獨立檔案
+                for (let i = 0; i < pagesToKeep.length; i++) {
+                    const pageIndex = pagesToKeep[i];
+                    const newPdf = await PDFDocument.create();
+                    const [copiedPage] = await newPdf.copyPages(originalPdf, [pageIndex]);
+                    newPdf.addPage(copiedPage);
+                    downloadFile(new Blob([await newPdf.save()], { type: 'application/pdf' }), `第${pageIndex+1}頁_${globalSplitFile.name}`);
+                }
+                showStatus('split-status', `✅ 已成功將保留的頁面分割為 ${pagesToKeep.length} 個獨立檔案！`, 'success');
+            } else {
+                // 將保留的頁面，合併存成單一個新檔案
+                const newPdf = await PDFDocument.create();
+                const copiedPages = await newPdf.copyPages(originalPdf, pagesToKeep);
+                copiedPages.forEach((page) => newPdf.addPage(page));
+                downloadFile(new Blob([await newPdf.save()], { type: 'application/pdf' }), `整理後_${globalSplitFile.name}`);
+                showStatus('split-status', '✅ 頁面整理成功！新檔案已下載。', 'success');
+            }
+        } catch (error) { 
+            console.error(error);
+            showStatus('split-status', '❌ 處理失敗。', 'error'); 
+        } finally { 
+            btnSave.disabled = false; btnExtract.disabled = false; 
+        }
+    }
+</script>
+</body>
+</html>
